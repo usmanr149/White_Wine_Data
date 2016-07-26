@@ -1,0 +1,419 @@
+---
+title: "Udacity Project 4: White Wine Data Set"
+author: "Usman Rizwan"
+date: "July 16, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+options(warn=-1)
+```
+
+##Introduction
+I will be analyzing the white wine quality data set. My aim will be to find the chemical properties that separate a white wine with a high rating from a white wine with a low rating.
+
+##Data Analysis
+To start off lets first load the data and see what kind of variables are present in the data.
+
+```{r, fig.width=8, fig.height=6}
+wine <- read.csv("wineQualityWhites.csv")
+names(wine)
+str(wine)
+```
+
+The names of the variables are quite descriptive and the scientific units for the variables are given below:
+
+   1. Fixed acidity (tartaric acid - g / dm^3)
+   2. Volatile acidity (acetic acid - g / dm^3)
+   3. Citric acid (g / dm^3)
+   4. Residual sugar (g / dm^3)
+   5. Chlorides (sodium chloride - g / dm^3
+   6. Free sulfur dioxide (mg / dm^3)
+   7. Total sulfur dioxide (mg / dm^3)
+   8. Density (g / cm^3)
+   9. pH
+   10. sulphates (potassium sulphate - g / dm3)
+   11. alcohol (% by volume)
+   12. quality (score between 0 and 10, based on sensory data)
+  
+For more information, see [Cortez et al., 2009][1]. Also note that 1 dm^3 = 1 L and 1 cm^3 = 1 ml.
+
+I am going to introduce a new variable in the data set that treats the quality rating as a factor instead of an integer.
+
+```{r, , echo=TRUE}
+wine$quality_as_factor <- factor(wine$quality)
+```
+
+I will start off my investigation by looking at 1d histograms to see if anything interesting jumps out.
+
+```{r}
+#To start off lets load some of the libraries we are going to be using.
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+```
+
+
+```{r, echo=FALSE}
+d <- melt(wine[,c(1:13)], id.vars = "X")
+#This function creates a 2 row table of the dataset. This will allow us to easily to create a histogram of the all the variables in the data set.
+```
+
+```{r}
+#This is just a simple helper function to reduce the amount of typing that will be rquired in the next code snippet.
+helper_fun <- function(varr, bin_size){
+  return(geom_histogram(data = d[d$variable == varr,], 
+                 binwidth = bin_size) )
+}
+```
+
+
+```{r fig.width=8, fig.height=6}
+ggplot(d,aes(x = value)) + 
+  helper_fun("fixed.acidity", 0.1) + 
+  helper_fun("volatile.acidity", 0.01) + 
+  helper_fun("residual.sugar", 0.1) +
+  helper_fun("chlorides", 0.01) +
+  helper_fun("free.sulfur.dioxide", 1) +
+  helper_fun("total.sulfur.dioxide", 1) +
+  helper_fun("density", 0.001) +
+  helper_fun("pH", 0.01) +
+  helper_fun("sulphates", 0.01) +
+  helper_fun("alcohol", 0.1) +
+  helper_fun("quality", 1) +
+  helper_fun("citric.acid", 0.01) +
+  facet_wrap(~variable, scales = "free") + 
+  scale_y_sqrt() + 
+  ylab("Count (Square Root Scale)")
+```
+
+Except for alcohol content and residual sugar concentration all other variables seem to have a  Gaussian distribution in square root scale. Lets take a closer look at the quality distribution.
+
+```{r, fig.width=8, fig.height=6}
+quality <- ggplot(aes(x = quality), data = wine) + 
+  geom_histogram(col = "green", binwidth = 1) + 
+  ylab("Count")
+quality_log <- ggplot(aes(x = quality), data = wine) + 
+  geom_histogram(col = "green", binwidth = 1) + 
+  scale_y_log10() + 
+  ylab("Count (log scale)")
+grid.arrange(quality, quality_log, nrow = 1, ncol = 2)
+```
+
+The quality distribution looks Gaussian in log scale. Most white wines are rated between 5 and 7, very few data points are available at the extremes of the quality rating. Also notice that no wine is rated a 10 or anything below 3.
+
+Alcohol content is an important factor in wines as it is probably the most prominently displayed quantity of wine bottles. Lets see the alcohol distribution in different wines looks like at different quality ratings.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(aes(x = alcohol), data = wine) + 
+  geom_histogram(aes(y = ..density..), 
+                 col = "green",  binwidth = 0.2) +
+  geom_density() +
+  facet_wrap(~quality_as_factor, scales = "free_y") + 
+  ylab("Density")
+```
+
+A density function overlap is shown on top of the histogram. I see an interesting pattern in the graphs above. The alcohol content distribution starts skewing to the right (towards higher alcohol content) as quality rating increases. So at this point I would posit that on average higher rated wines have a higher alcohol content on average than lower rated wines. We can confirm this by looking at the mean alcohol content of different wine ratings:
+
+```{r}
+by(wine$alcohol, wine$quality_as_factor, mean)
+```
+
+An upwards trend is apparent but there are a few aberrations. Another way to visualize the data above is to use only density plots.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(data = wine, aes(alcohol, fill = quality_as_factor)) + 
+  geom_density(alpha = 0.5) + 
+  scale_colour_brewer(palette = "Set2")
+```
+
+The negative skew for high quality wines is apparent. Another important property of wine is their pH. The acids present in the wine contribute to its pH and also provide a flavor balance between the grape and the wine. Lets look at the pH distribution of white wines in our data.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(aes(x = pH), data = wine) + 
+  geom_histogram(col = "green", binwidth = 0.01)
+```
+
+The overall pH distribution in our data set is almost Gaussian. Lets see what the pH distribution for different quality rating looks like.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(aes(x = pH), 
+       data = wine) + 
+  geom_histogram(binwidth = 0.01, col = "green") + 
+  facet_wrap(~quality_as_factor, 
+             scales = "free_y")
+```
+
+There is no clear pattern cut pattern in the graphs above. The pH distribution of wines of different rating doesn't seem to be particularly different. It is clear that all wines are acidic and have a pH between 2.90 and 3.70. For non-chemist, pH of 7 is neutral. Acidic solutions have a pH below 7 while basic solutions have a pH above 7. There are a variety of different kinds of acids present in the wines, I want to see which acid has the most affect on the pH.
+
+```{r, fig.width=8, fig.height=6}
+p1 <- ggplot(aes(x = fixed.acidity, y = pH), 
+             data = wine) + 
+  geom_point(alpha = 1/5) + 
+  xlab("Fixed Acid (g / L)") + 
+  ylab("pH")
+p2 <- ggplot(aes(x = volatile.acidity, y = pH), 
+             data = wine) + 
+  geom_point(alpha = 1/5) + 
+  xlab("Volatile Acid (g / L)") + 
+  ylab("pH")
+p3 <- ggplot(aes(x = citric.acid, y = pH), 
+             data = wine) + 
+  geom_point(alpha = 1/5) +
+  xlab("Citric Acid (g / L)") + 
+  ylab("pH")
+p4 <- ggplot(aes(x = alcohol, y = pH), 
+             data = wine) + 
+  geom_point(alpha = 1/5) + 
+  xlab("Alcohol (% by volume)") + 
+  ylab("pH")
+grid.arrange(p1, p2, p3, p4, ncol=2, nrow =2)
+```
+
+The scatter plot obscures a lot of the detail so lets use a smoother:
+
+```{r, fig.width=8, fig.height=6}
+p1 <- ggplot(aes(x = fixed.acidity, y = pH), data = wine) + 
+  geom_smooth(alpha = 1/5) +
+  xlab("Fixed Acid (g / L)") + 
+  ylab("pH")
+p2 <- ggplot(aes(x = volatile.acidity, y = pH), data = wine) + 
+  geom_smooth(alpha = 1/5) + 
+  xlab("Volatile Acid (g / L)") + 
+  ylab("pH")
+p3 <- ggplot(aes(x = citric.acid, y = pH), data = wine) + 
+  geom_smooth(alpha = 1/5) + 
+  xlab("Citric Acid (g / L)") + 
+  ylab("pH")
+p4 <- ggplot(aes(x = alcohol, y = pH), data = wine) + 
+  geom_smooth(alpha = 1/5) + 
+  xlab("Alcohol (% by volume)") + 
+  ylab("pH")
+grid.arrange(p1, p2, p3, p4, ncol=2, nrow =2)
+```
+
+The smoothed out plots clearly show that it is the so called fixed acids (made up of a variety of acids but primarily tartaric acid) that have the greatest affect on pH. A greater concentration of fixed acids corresponds to a lower pH. One surprising pattern that I observe is that higher alcohol content corresponds to a higher pH. This is a bit surprising because alcohol is usually assumed to be an acid but it is possible for it to behave as a base. It seems alcohol acts as a neutralizing agent and increases the pH.
+
+Sugar is also an important contributor to the taste of wine. Lets look at the distribution of residual sugars in the wines in our data set.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(aes(x = residual.sugar), 
+       data = wine) + 
+  geom_histogram(aes(color = "pink"), binwidth = 0.4)
+```
+
+The data shows a positive skew. Lets see what the residual sugar distribution looks when faceted by quality.
+
+```{r, fig.width=8, fig.height=6}
+ggplot(aes(x = residual.sugar), 
+       data = wine) + 
+  geom_histogram(aes(color = "pink"), 
+                 binwidth = 0.4) + 
+  facet_wrap(~quality_as_factor, 
+             scales = "free") + 
+  scale_y_sqrt() + 
+  ylab("Count (Square root scale)")
+```
+
+Notice that both the x-axis and y-axis are free in the above graphs. A positive skewness is seen in all of the plots. It seems that the residual sugar tends to be lower in wines with a high quality rating. We can verify this by looking at the mean residual sugar concentration at different quality ratings:
+
+```{r}
+by(wine$residual.sugar, wine$quality_as_factor, mean)
+```
+
+There is a downward trend in mean residual sugar concentration as quality rating increases but there a few aberrations. Because of the positive skew in the data set it would actually be more meaning full to look at the medians instead of the means:
+
+```{r}
+by(wine$alcohol, wine$quality_as_factor, median)
+```
+
+Again we see a downward trend, in this case with fewer aberrations. It seems that histogram is not the best way of visualizing this data set because when the data is faceted by quality we see that there are very few wines rated 3 or 9. Histogram plots work best when there are a lot of data points. Lets look at alcohol content, residual sugar, chlorides and density using box plots.
+
+```{r, fig.width=8, fig.height=6}
+#For this it will be very helpful to introduce a function that reduces the amount of typing we have to do for each plot.
+plot_box <- function(arg_y, arg_x, data_set){
+  ggplot(aes(y = arg_y, x = arg_x), 
+         data = 
+           subset(data_set, is.finite(data_set$arg1) & 
+                    is.finite(data_set$arg2)) ) + 
+    geom_boxplot()
+}
+```
+
+```{r, fig.width=8, fig.height=6}
+#Now using the plot_box functio
+p1 <- plot_box(wine$alcohol, 
+               wine$quality_as_factor, wine) + 
+  stat_summary(fun.y = mean, 
+               geom = "point", shape = 4) + 
+  xlab("Quality Rating") + 
+  ylab("Alcohol (% by volume)")
+p2 <- plot_box(wine$residual.sugar, 
+               wine$quality_as_factor, wine) + 
+  stat_summary(fun.y = mean, geom = "point", 
+               shape = 4) + 
+  xlab("Quality Rating") + 
+  ylab("Residual Sugar (g / L)") + 
+  ylim(0,20)
+p3 <- plot_box(wine$chlorides, 
+               wine$quality_as_factor, wine) + 
+  stat_summary(fun.y = mean, 
+               geom = "point", shape = 4) + 
+  xlab("Quality Rating") + 
+  ylab("Chlorides (g / L)") + 
+  ylim(0.02, 0.08)
+p4 <- plot_box(wine$density, 
+               wine$quality_as_factor, wine) + 
+  stat_summary(fun.y = mean, 
+               geom = "point", shape = 4) + 
+  xlab("Quality Rating") + 
+  ylab("Density (g / ml)") + 
+  ylim(0.98,1.01)
+grid.arrange(p1, p2, p3, p4, nrow = 2, ncol = 2)
+```
+
+From the plots above we can see some of the qualities that separate wines rated higher than wines rated lower. A higher rated wine has greater alcohol content, lower amount of chlorides and a lower density. Now lets take a closer look at the relationship between alcohol content vs. chlorides concentration and density.
+
+```{r, fig.width=8, fig.height=6}
+plot_point <- function(arg_y, arg_x, 
+                       data_set, color_pal){
+  ggplot(aes(y = arg_y, x = arg_x), 
+         data = data_set) + 
+    geom_point(aes(color = color_pal), 
+               stat = "summary", fun.y = median)
+}
+```
+
+```{r, fig.width=8, fig.height=6}
+p1 <- plot_point(wine$alcohol, 
+                 wine$chlorides, wine, wine$quality_as_factor) + 
+  xlab("Chlorides (g / L)") + 
+  ylab("Alcohol (% by volume)") +
+  xlim(0, quantile(wine$chlorides, 0.99)) + 
+  scale_colour_brewer(palette = "Set2")
+p2 <- plot_point(wine$alcohol, 
+                 wine$density, wine, wine$quality_as_factor) + 
+  xlab("Density in log scale (g / ml)") + 
+  ylab("Alcohol (% by volume)") + 
+  scale_x_log10(limits = c(0.985, 
+                           quantile(wine$density, 0.99))) + 
+  scale_colour_brewer(palette = "Set2")
+grid.arrange(p1, p2, nrow = 2, ncol = 1)
+```
+
+From the plots above it is clear that higher rated wines tend to have higher alcohol content and lower chloride concentration. It is apparent that higher alcohol content corresponds to lower density. This makes sense because alcohols in general are less dense than water so increased alcohol content of wine would reduce density. Lets look at the correlation between alcohol content and density:
+
+```{r, fig.width=8, fig.height=6}
+cor(wine$alcohol, log10(wine$density))
+```
+
+It is clear that there is strong negative correlation between alcohol content and density. Lets now look at alcohol content and chlorides more closely:
+
+```{r, fig.width=8, fig.height=6}
+plot_point(wine$alcohol, 
+                 wine$chlorides, wine, wine$quality_as_factor) + 
+  xlab("Chlorides (g / L), Log Scale") + 
+  ylab("Alcohol (% by volume)") +
+  scale_x_log10(limits = c(min(wine$chlorides), 
+                           quantile(wine$chlorides, 0.99)))  + 
+  scale_colour_brewer(palette = "Set2")
+```
+
+According to the scientific paper ["Chloride concentration in red wines: influence of terroir and grape type"][2] high concentration of chloride in the wine gives it a salty taste and this can throw off potential customer. Our data supports this idea because we can see that wines with high chloride content are generally rated low.
+
+A surprising fact I found is that higher rated wines have a lower mean and median residual sugar content. I generally like sweet wine so I want to explore the residual sugar content level in alcohol.
+
+```{r, fig.width=8, fig.height=6}
+p1 <- plot_point(wine$alcohol, wine$residual.sugar, 
+                 wine, wine$quality_as_factor) + 
+  scale_y_log10() +
+  xlab("Residual Sugar (g / L)") + 
+  ylab("Alcohol (% by volume), Log Scale") + 
+  scale_colour_brewer(palette = "Set2") + 
+  xlim(0, quantile(wine$residual.sugar, 0.99))
+p2 <- plot_point(wine$density, wine$residual.sugar, 
+                 wine, wine$quality_as_factor) + 
+  xlab("Residual Sugar (g / L)") + 
+  ylab("Density (g / L)") + 
+  scale_colour_brewer(palette = "Set2") + 
+  xlim(0, quantile(wine$residual.sugar, 0.99))
+grid.arrange(p1, p2, nrow = 2, ncol = 1)
+```
+
+The plots show some interesting relationship between residual sugar and density. It is clear that as density decreases the residual sugar content decreases. According to the article ["Wine Jargon: What is Residual Sugar?"][WineJargon], residual sugar is leftover sugar after fermentation. Wine is made by fermenting the juice of grapes, which is intensely sweet. During fermentation the sugar is used up by the yeast and carbon dioxide gas and alcohols are produced as a result. Alcohol fermentation stops by itself when the yeast dies due to alcohol toxicity. This explains the linear relationship between residual sugar and density. This can also be confirmed by looking at the correlation between density and residual sugar concentration.
+
+```{r}
+cor(wine$density, wine$residual.sugar)
+```
+
+It is clear that there is strong positive correlation between density and residual sugar concentration. Another important pattern that is notable from the plots above is that at the same residual sugar level, the wine with the lower density and greater alcohol content is likely to have a higher rating than wine with higher density and lower alcohol content. This suggest that at certain alcohol level there is a specific residual sugar level that goes well it. If alcohol level decreases and sugar level stays consistent than taste is thrown off leading to the wine having a lower rating. 
+
+#Reflections
+I started out by looking at a couple of 1-dimensional histograms to start of my analysis. This did not really provide any particular insights into the data set. When I faceted some of the histograms by quality rating I found that there was far too much overlap in data, for e.g. pH, density, residual sugar levels tend to overlap a lot for different quality ratings. This makes it hard to discern the kinds of patterns easily seen in box plot. Another problem with using histograms to interpret the data set is that there is not enough data for wines rated 3 and 9. Histograms usually work best when there are are a lot of data points and when the data has a continuous distribution.
+
+Since I studied chemistry at university I analyzed the relationship between the pH and the different types of acids present in the wines. I included alcohols in the acids category but they are very weak acids and can also behave as a base. From this analysis I learned that fixed acid (or tartaric acid) is the acid that has the greatest affect on the pH of the wine. Further exploration of pH by itself of wines led me to a dead end as pH is clearly not the main differentiating factor between wine ratings.
+
+I then proceeded to explore the relationship between the quality ratings and alcohol content, residual sugar, chlorides and density using box plots. This avenue proved more fruitful as I was able to tease out some factors that separate a white wine with a high rating from a white wine with a low rating. High rated wines tend to have a high alcohol content and low residual sugar and chloride concentrations.
+
+During my analysis I also chanced upon the linear relationship between alcohol content and density as well as the linear relationship between residual sugar and alcohol content. Both of these relationship have an interesting explanation (see previous section). Another interesting tidbit in the data set is that wines with the same alcohol content have a similar quality rating.
+
+The data could be enriched if the judges gave a more detailed rating. Like a rating for coloration, aroma and other sensory factors that they take into account when rating a wine. This kind of a rating will allow us to tease out how different chemical properties of a wine contribute its effect on different senses (sight, smell and taste).
+
+## Final Plots
+From the data analysis performed it can be seen that the best rated wine tend to have a high alcohol content on average.
+
+```{r, fig.width=8, fig.height=6}
+plot_box(wine$alcohol, 
+               wine$quality_as_factor, wine) + 
+  stat_summary(fun.y = mean, 
+               geom = "point", shape = 4) + 
+  xlab("Quality Rating") + 
+  ylab("Alcohol (% by volume)") + 
+  ggtitle("Alcohol content\n vs. Quality Rating")
+```
+
+Another strong relationship observed in this data set is between the alcohol content and density. The linear relationship between alcohol content and density in log scale is apparent. Wine is mostly water. The density of water is 1g/ml at room temperature. The alcohol present in wine is mostly ethanol, which has a density of [0.789 g/ml][3] at room temperatures. This difference in densities explains why an increase in alcohol content means a lower overall density of wine. Also notice that the higher rated wines are bunched around the top of the plot, this confirms the information presented in the previous plot that higher rated wines have a higher alcohol content and thus a lower density.
+
+```{r, fig.width=8, fig.height=6}
+plot_point(wine$alcohol, wine$density, wine, 
+           wine$quality_as_factor) + 
+  xlab("Density (g / ml), Log Scale") + 
+  ylab("Alcohol (% by volume)") +
+  geom_point(aes(color = quality_as_factor), 
+             stat = "summary", fun.y = median) +
+  ggtitle("Alcohol Content vs Density") + 
+  scale_colour_brewer(palette = "Set2") + 
+  scale_x_log10(limits = c(min(wine$density), 
+       quantile(wine$density, 0.99) ) ) + 
+  stat_smooth(method = "lm")
+```
+
+Another very strong relationship in the data set is the linear relationship between residual sugar and density. As explained earlier residual sugar is leftover sugar after fermentation. Wine is made by fermenting the juice of grapes. During fermentation the sugar in grapes is used up by the yeast and carbon dioxide gas and alcohols are produced as a result. Alcohol fermentation stops when the yeast dies due to alcohol toxicity. As residual sugar is consumed the alcohol content increases, as the alcohol content increases the density decreases (see previous plot). This explains the linear relationship between residual sugar and density. This plot perfectly compliments the relationship seen in the previous plot.
+
+```{r, fig.width=8, fig.height=6}
+plot_point(wine$density, wine$residual.sugar, 
+                 wine, wine$quality_as_factor) + 
+  xlab("Residual Sugar (g / L)") + 
+  ylab("Density (g / L)") + 
+  scale_colour_brewer(palette = "Set2") + 
+  xlim(0, quantile(wine$residual.sugar, 0.99)) + 
+  stat_smooth(method = "lm")
+```
+
+Also note that the higher rated wines rated 7 or above are almost all below the best-fit line while wines rated 5 or below are almost all above the best-fit line. This suggests that higher rated wines have a lower density and a lower residual sugar concentration.
+
+#Conclusion
+There really is no clear cut way to separate a high rated wine from low rated wine based on just the chemical properties given in this data sets. Though some interesting and important patterns do emerge. The best rated wines tend to have a low chloride concentration, residual sugar concentration and density while having a high alcohol content.
+
+The data set is also quite limited as it only concerns the *vinho verdo* wines produced in the [Minho (North-west) region of Portugal][1]. The rating agency that rated these wines is devoted to improving the quality and marketing of *vinho verdo* wines. So the ratings might be biased because of the limited samples, the geography and goals of the testers.
+
+Wine tasting is not a science. As wine is judged by its aroma, color, viscosity, opacity, taste and a variety of other sensory effects that really cannot be quantified by only knowing the chemical properties.
+
+#References
+I used http://www.cookbook-r.com/Graphs and stack exchange for help with plots. Other sources used are linked in the text.
+
+[WineJargon]: http://drinks.seriouseats.com/2013/04/wine-jargon-what-is-residual-sugar-riesling-fermentation-steven-grubbs.html
+[1]: http://www3.dsi.uminho.pt/pcortez/wine5.pdf
+[2]: http://www.scielo.br/scielo.php?script=sci_arttext&pid=S0101-20612015000100095
+[3]: https://pubchem.ncbi.nlm.nih.gov/compound/ethanol#section=Solubility
